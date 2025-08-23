@@ -76,11 +76,17 @@
             <div class="flex flex-col items-center">
                 <h2 class="text-xl font-semibold text-gray-700 mb-2">塗鴉線稿</h2>
                 <canvas id="result-canvas" class="w-full h-auto rounded-lg shadow-md"></canvas>
-                <a id="download-link" href="#" download="line-drawing.png" class="hidden mt-4">
-                    <button id="download-btn" class="w-full md:w-auto px-8 py-3 bg-pink-500 text-white font-semibold rounded-full shadow-lg transition-all duration-300 hover:bg-pink-600 transform hover:scale-105">
+                <!-- START: New elements for paper size selection and download -->
+                <div id="download-controls" class="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 mt-4 hidden">
+                    <select id="paper-size-select" class="p-2 rounded-full border-2 border-pink-500 text-pink-700 font-semibold bg-white transition-all duration-300 hover:border-pink-700">
+                        <option value="A4">A4 紙張</option>
+                        <option value="A3">A3 紙張</option>
+                    </select>
+                    <button id="download-btn" class="px-8 py-3 bg-pink-500 text-white font-semibold rounded-full shadow-lg transition-all duration-300 hover:bg-pink-600 transform hover:scale-105">
                         下載塗鴉
                     </button>
-                </a>
+                </div>
+                <!-- END: New elements -->
             </div>
         </div>
     </div>
@@ -91,7 +97,9 @@
         const convertBtn = document.getElementById('convert-btn');
         const originalImg = document.getElementById('original-img');
         const resultCanvas = document.getElementById('result-canvas');
-        const downloadLink = document.getElementById('download-link');
+        const downloadControls = document.getElementById('download-controls');
+        const downloadBtn = document.getElementById('download-btn');
+        const paperSizeSelect = document.getElementById('paper-size-select');
         const messageBox = document.getElementById('message-box');
         const contrastSlider = document.getElementById('contrast-slider');
         const contrastValueSpan = document.getElementById('contrast-value');
@@ -103,6 +111,18 @@
         const thresholdValueSpan = document.getElementById('threshold-value');
         
         let lastLoadedBmp = null; // Store the last loaded ImageBitmap
+
+        // Define paper sizes in pixels at 300 DPI for both portrait and landscape
+        const paperSizes = {
+            'A4': {
+                portrait: { width: 2480, height: 3508 },
+                landscape: { width: 3508, height: 2480 }
+            },
+            'A3': {
+                portrait: { width: 3508, height: 4961 },
+                landscape: { width: 4961, height: 3508 }
+            }
+        };
 
         // Function to show a user-friendly message
         function showMessage(text, type = 'info') {
@@ -170,7 +190,7 @@
             ctx.putImageData(imageData, 0, 0);
         }
 
-        // Main conversion logic, now in a separate function
+        // Main conversion logic for the preview canvas
         function performConversion() {
             if (!lastLoadedBmp) {
                 return;
@@ -206,14 +226,83 @@
                 // Apply the threshold filter to the result canvas
                 applyThreshold(resultCanvas, threshold);
                 
-                // Make the download link visible and update its href
-                downloadLink.href = resultCanvas.toDataURL('image/png');
-                downloadLink.classList.remove('hidden');
+                // Make the download controls visible
+                downloadControls.classList.remove('hidden');
 
             } catch (error) {
                 console.error('Conversion failed:', error);
                 showMessage('圖片轉換失敗，請確認檔案格式正確。', 'error');
             }
+        }
+
+        // New function to handle high-resolution export for printing
+        function exportForPrint(paperSize) {
+            if (!lastLoadedBmp) {
+                showMessage('請先上傳圖片！', 'error');
+                return null;
+            }
+
+            // Determine the orientation of the source image
+            const sourceWidth = lastLoadedBmp.width;
+            const sourceHeight = lastLoadedBmp.height;
+            const isSourceLandscape = sourceWidth > sourceHeight;
+            
+            // Get the correct paper dimensions based on selected size and source orientation
+            let dimensions;
+            if (isSourceLandscape) {
+                dimensions = paperSizes[paperSize].landscape;
+            } else {
+                dimensions = paperSizes[paperSize].portrait;
+            }
+            
+            const { width, height } = dimensions;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // Set the background to white
+            tempCtx.fillStyle = '#FFFFFF';
+            tempCtx.fillRect(0, 0, width, height);
+            
+            // Calculate the correct scaling to fit the image while maintaining aspect ratio
+            const scale = Math.min(width / sourceWidth, height / sourceHeight);
+            
+            const scaledWidth = sourceWidth * scale;
+            const scaledHeight = sourceHeight * scale;
+            const offsetX = (width - scaledWidth) / 2;
+            const offsetY = (height - scaledHeight) / 2;
+
+            // Apply filters to create the line drawing on the temp canvas
+            const contrast = contrastSlider.value;
+            const blurRadius = blurSlider.value;
+            const darkness = darknessSlider.value;
+            const threshold = thresholdSlider.value;
+
+            // Create intermediate canvases for filtering
+            const bnwTemp = document.createElement('canvas');
+            bnwTemp.width = sourceWidth; bnwTemp.height = sourceHeight;
+            const bnwCtx = bnwTemp.getContext('2d');
+            bnwCtx.filter = `grayscale(1) contrast(${contrast}%)`;
+            bnwCtx.drawImage(lastLoadedBmp, 0, 0);
+            
+            const blurTemp = document.createElement('canvas');
+            blurTemp.width = sourceWidth; blurTemp.height = sourceHeight;
+            const blurCtx = blurTemp.getContext('2d');
+            blurCtx.filter = `grayscale(1) invert(1) blur(${blurRadius}px) contrast(${contrast}%) brightness(${darkness}%)`;
+            blurCtx.drawImage(lastLoadedBmp, 0, 0);
+
+            // Draw the filtered images onto the high-resolution canvas with scaling and centering
+            tempCtx.drawImage(bnwTemp, offsetX, offsetY, scaledWidth, scaledHeight);
+            tempCtx.globalCompositeOperation = 'color-dodge';
+            tempCtx.drawImage(blurTemp, offsetX, offsetY, scaledWidth, scaledHeight);
+            tempCtx.globalCompositeOperation = 'source-over';
+
+            // Apply thresholding to the final high-res canvas
+            applyThreshold(tempCanvas, threshold);
+            
+            return tempCanvas.toDataURL('image/png');
         }
 
         // Event listener for the main "轉換" button
@@ -230,14 +319,13 @@
             const reader = new FileReader();
             reader.onload = async (e) => {
                 originalImg.src = e.target.result;
-                downloadLink.classList.add('hidden'); // Hide download button during conversion
+                downloadControls.classList.add('hidden'); // Hide download button during conversion
 
                 originalImg.onload = async () => {
                     try {
                         lastLoadedBmp = await createImageBitmap(originalImg);
                         performConversion(); // Perform the initial conversion
                         showMessage('轉換完成！', 'success');
-
                     } catch (error) {
                         console.error('Conversion failed:', error);
                         showMessage('圖片載入失敗，請檢查檔案是否損壞。', 'error');
@@ -253,6 +341,21 @@
                 };
             };
             reader.readAsDataURL(file);
+        });
+        
+        // Event listener for the download button
+        downloadBtn.addEventListener('click', () => {
+            const selectedSize = paperSizeSelect.value;
+            const dataURL = exportForPrint(selectedSize);
+            if (dataURL) {
+                const link = document.createElement('a');
+                link.href = dataURL;
+                link.download = `line-drawing-${selectedSize}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showMessage('圖片已成功下載！', 'success');
+            }
         });
 
         // Event listeners for the sliders to re-run the conversion
