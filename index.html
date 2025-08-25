@@ -66,13 +66,7 @@
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            <!-- Original Image Section -->
-            <div class="flex flex-col items-center">
-                <h2 class="text-xl font-semibold text-gray-700 mb-2">原彩色圖片</h2>
-                <img id="original-img" alt="Original Image" class="w-full h-auto rounded-lg shadow-md max-w-full object-contain" />
-            </div>
-
-            <!-- Result Canvas Section -->
+            <!-- Result Canvas Section (Moved to the left) -->
             <div class="flex flex-col items-center">
                 <h2 class="text-xl font-semibold text-gray-700 mb-2">塗鴉線稿</h2>
                 <canvas id="result-canvas" class="w-full h-auto rounded-lg shadow-md"></canvas>
@@ -87,6 +81,12 @@
                     </button>
                 </div>
                 <!-- END: New elements -->
+            </div>
+
+            <!-- Original Image Section (Moved to the right) -->
+            <div class="flex flex-col items-center">
+                <h2 class="text-xl font-semibold text-gray-700 mb-2">原彩色圖片</h2>
+                <img id="original-img" alt="Original Image" class="w-full h-auto rounded-lg shadow-md max-w-full object-contain" />
             </div>
         </div>
     </div>
